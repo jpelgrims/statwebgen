@@ -1,2 +1,2 @@
 # statwebgen
-Static website generator
+A simple static website generator.
