@@ -4,7 +4,7 @@ import glob
 
 INPUT_DIR = r'c:\users\jelle\desktop\website'
 OUTPUT_DIR = r'c:\users\jelle\documents\github\jpelgrims'
-WORKING_DIR = os.getcwd()
+WORKING_DIR = os.path.dirname(os.path.realpath(__file__))
 EXCLUDE_DIRS = [WORKING_DIR.lower(),
                 r'c:\users\jelle\desktop\website\.idea',
                 r'c:\users\jelle\desktop\website\.idea\copyright']
