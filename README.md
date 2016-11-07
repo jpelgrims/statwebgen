@@ -11,15 +11,15 @@ The default page template looks like this:
 ~~~~html
 <!DOCTYPE html>
 <html>
-    <%head%>
+    <%head here%>
     <body>
-        <%header%>
+        <%header here%>
         <div class="page-content">
-            <%page%>
+            <%page content here%>
         </div>
-        <%footer%>
+        <%footer here%>
     </body>
 </html>
 ~~~~
 
-The `<%...%>` tags are replaced with the contents of the file with the same name as the tag. The `<%header%>` tag, for example,  will be replaced by the contents in `header.html`. The `<%page%>` tag is replaced by the markdown file's content (converted to html).
+The `<%page%>` tag is replaced by the markdown file's content (converted to html).
