@@ -1,113 +1,50 @@
-import os, os.path
-import shutil
-import glob
 import markdown
 import datetime
-# 'Invisible' dependency on Pygments for markdown highlighting
 
-def delete_file(filename):
-    try:
-        os.remove(filename)
-    except:
-        pass
+class Page:
 
-INPUT_DIR = r'c:\users\jelle\desktop\website'
-OUTPUT_DIR = r'c:\users\jelle\documents\github\jpelgrims'
-WORKING_DIR = os.path.dirname(os.path.realpath(__file__))
+    def __init__(self, template, page_type):
+        self.template = template
+        self.type = page_type
+        self.title = None
+        self.topic = None
+        self.description = None
+        self.created = None
+        self.updated = None
+        self.content = None
+        self.teaser = None
 
-print("Converting Markdown files found in \'{}\' into static website at \'{}\'".format(INPUT_DIR, OUTPUT_DIR))
+    def load(self, filepath=None, page=None):
+        if filepath:
+            self.filepath = filepath
+            with open(self.filepath, 'r') as file:
+                page = file.readlines()
 
-files = []
-pattern   = "*"
+        if self.type in ['page', 'post']:
+            self.title = page[0][2:]
+            self.content = "\n".join(page[0:])
+        if self.type == 'post':
+            self.topic = page[2][7:].replace("</small>", "")
+            creation_data = page[4]
+            self.created = datetime.datetime.strptime(creation_data[14:25].replace(" ", ""), "%d/%m/%Y")
+            self.content = "#" + self.title + "\n\n**Table of contents**\n" + "\n[TOC]\n\n" +  "".join(page[10:])
+            post_link = "[Read more...](/posts/" + self.title.lower().replace(" ", "_") + ".html)"
+            self.teaser = "\n".join(["## " + self.title, creation_data, page[10], post_link, "\n"])
 
-# Get list of all files in input directory and subdirectorie
-for dir,_,_ in os.walk(INPUT_DIR):
-    files.extend(glob.glob(os.path.join(dir,pattern)))
+    def _to_html(self, template_file):
+        with open(template_file, 'r') as file:
+            template = file.read()
 
-# Sort files into markdown and other
-md_files = [file for file in files if ".md" in file and os.path.isfile(file)]
-other_files = [file for file in files if not ".md" in file and not ".html" in file and os.path.isfile(file)]
+        html = markdown.markdown(self.content, extensions=['codehilite', 'fenced_code', 'toc'])
+        html_page = template.replace('<%post%>', html)
+        
+        return html_page
 
-# Move other files to output directory
-for file in other_files:
-    copyfile = os.path.dirname(OUTPUT_DIR + file.lower().replace(INPUT_DIR,'')) + '\\' + os.path.basename(file)
-    try:
-        os.makedirs(os.path.dirname(copyfile))
-    except:
-        pass
-    shutil.copyfile(file, copyfile)
-
-# Create index page (with post teasers) and blog page (with list of posts)
-delete_file(INPUT_DIR + '\\' + 'index.md')
-delete_file(INPUT_DIR + '\\' + 'blog.md')
-
-topics = {}
-teasers = {}
-
-for md_file in [file for file in md_files if "posts" in file]:
-
-    with open(md_file, 'r') as file:
-        content = file.readlines()
-
-    try:
-        title = content[0][2:]
-        topic = content[2][7:].replace("</small>", "")
-        creation_data = content[4]
-        created_date = datetime.datetime.strptime(creation_data[14:25].replace(" ", ""), "%d/%m/%Y")
-        first_paragraph = content[6]
-        post_link = "[Read more](/posts/" + title.replace(" ", "_") + ".html)"
-        md_teaser = "\n".join(["## " + title, creation_data, first_paragraph, post_link, "\n"])
-
-        if topic not in topics.keys():
-            topics[topic] = [title]
-        else:
-            topics[topic].append(title)
-
-        if created_date not in teasers.keys():
-            teasers[created_date] = [md_teaser]
-        else:
-            teasers[created_date].append(md_teaser)
-    
-    except Exception as e:
-        # Faulty post
-        print(e)
-
-with open(INPUT_DIR + '\\' + 'blog.md', 'a') as blog:
-    for topic, titles in topics.items():
-        blog.write("## " + topic + "\n")
-        for title in titles:
-            post_link = ("[{}](/posts/" + title.replace(" ", "_") + ".html)").format(title)
-            blog.write("   * " + post_link + "\n")
-        blog.write("\n")
-
-with open(INPUT_DIR + '\\' + 'index.md', 'a') as index:
-    for created_date, teasers in sorted(teasers.items(), key=lambda t: t[0], reverse=True):
-        for teaser in teasers:
-            index.write(teaser)
-
-# Load page template
-with open((INPUT_DIR + '\\' + 'template.html'), 'r') as file:
-    template = file.read()
-
-# Loop over all content files
-for md_file in md_files:
-    with open(md_file, 'r') as file:
-        content = file.readlines()
-    
-    # Convert markdown to html
-    post = markdown.markdown("".join(content), extensions=['codehilite', 'fenced_code', 'toc'])
-    
-    # Use page template
-    page = template.replace('<%post%>', post)
-
-    # Save to output directory
-    outputfile = os.path.dirname(OUTPUT_DIR + md_file.lower().replace(INPUT_DIR,'')) + '\\' + os.path.splitext(os.path.basename(md_file))[0] + '.html'
-    try:
-        os.makedirs(os.path.dirname(outputfile))
-    except:
-        pass
-    with open(outputfile, 'w') as file:
-        file.write(page)
-
-print('Succesfully created static site @', OUTPUT_DIR)
-
+    def save(self, filepath):
+        # Make sure directory exists, if not, create it
+        try:
+            os.makedirs(os.path.dirname(outputfile))
+        except:
+            pass
+        with open(filepath, 'w') as file:
+            file.write(self._to_html(self.template))
