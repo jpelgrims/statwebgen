@@ -38,7 +38,7 @@ for file in other_files:
 # Turn all markdown files into Page objects
 template_file = INPUT_DIR + '\\' + 'template.html'
 pages = []
-print(md_files)
+
 for md_file in md_files:
     page_type = "page"
     if "posts" in md_file:
@@ -76,7 +76,7 @@ md_blog = "".join(md_blog)
     
 blog = Page(template_file, 'page')
 blog.load(page=md_blog)
-blog.save(OUTPUT_DIR + '\\' + 'blog.md')
+blog.save(OUTPUT_DIR + '\\' + 'blog.html')
 
 md_index = []
 for created_date, teasers in sorted(teasers.items(), key=lambda t: t[0], reverse=True):
@@ -86,7 +86,7 @@ md_index = "".join(md_index)
 
 index = Page(template_file, 'page')
 index.load(page=md_blog)
-index.save(OUTPUT_DIR + '\\' + 'index.md')
+index.save(OUTPUT_DIR + '\\' + 'index.html')
 
 print('Succesfully created static site @', OUTPUT_DIR)
 

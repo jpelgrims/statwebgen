@@ -1,5 +1,6 @@
 import markdown
 import datetime
+import os
 
 class Page:
 
@@ -22,7 +23,7 @@ class Page:
 
         if self.type in ['page', 'post']:
             self.title = page[0][2:]
-            self.content = "\n".join(page[0:])
+            self.content = "".join(page[0:])
         if self.type == 'post':
             self.topic = page[2][7:].replace("</small>", "")
             creation_data = page[4]
@@ -43,7 +44,7 @@ class Page:
     def save(self, filepath):
         # Make sure directory exists, if not, create it
         try:
-            os.makedirs(os.path.dirname(outputfile))
+            os.makedirs(os.path.dirname(filepath))
         except:
             pass
         with open(filepath, 'w') as file:
