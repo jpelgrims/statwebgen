@@ -40,10 +40,7 @@ template_file = INPUT_DIR + '\\' + 'template.html'
 pages = []
 
 for md_file in md_files:
-    page_type = "page"
-    if "posts" in md_file:
-        page_type = "post"
-    page = Page(template_file, page_type)
+    page = Page(template_file)
     page.load(filepath=md_file)
     pages.append(page)
     outputfile = os.path.dirname(OUTPUT_DIR + md_file.lower().replace(INPUT_DIR,'')) + '\\' + os.path.splitext(os.path.basename(md_file))[0] + '.html'
@@ -51,41 +48,44 @@ for md_file in md_files:
 
 # Create index page (with post teasers) and blog page (with list of posts)
 posts = [page for page in pages if page.type == 'post']
-topics = {}
+categories = {}
 teasers = {}
 
 for post in posts:
-    if post.topic not in topics.keys():
-         topics[post.topic] = [post.title]
+    if post.category not in categories.keys():
+         categories[post.category] = [post.title]
     else:
-        topics[post.topic].append(post.title)
+        categories[post.category].append(post.title)
 
     if post.created not in teasers.keys():
         teasers[post.created] = [post.teaser]
     else:
         teasers[post.created].append(post.teaser)
 
-md_blog = []
-for topic, titles in topics.items():
-    md_blog.append("## " + topic + "\n")
+blog = Page(template_file)
+blog.title = "Blog"
+blog.description = "List of all published posts"
+
+for category, titles in categories.items():
+    blog.content.append("## " + category + "\n")
     for title in titles:
         post_link = ("[{}](/posts/" + title.lower().replace(" ", "_") + ".html)").format(title)
-        md_blog.append("   * " + post_link + "\n")
-    md_blog.append("\n")
-md_blog = "".join(md_blog)
-    
-blog = Page(template_file, 'page')
-blog.load(page=md_blog)
+        blog.content.append("   * " + post_link + "\n")
+    blog.content.append("\n")
+
+blog.content = "".join(blog.content)
 blog.save(OUTPUT_DIR + '\\' + 'blog.html')
 
-md_index = []
+
+index = Page(template_file)
+index.title = "Index"
+index.description = "Homepage"
+
 for created_date, teasers in sorted(teasers.items(), key=lambda t: t[0], reverse=True):
     for teaser in teasers:
-        md_index.append(teaser)
-md_index = "".join(md_index)
+        index.content.append(teaser)
 
-index = Page(template_file, 'page')
-index.load(page=md_blog)
+index.content = "".join(index.content)
 index.save(OUTPUT_DIR + '\\' + 'index.html')
 
 print('Succesfully created static site @', OUTPUT_DIR)
