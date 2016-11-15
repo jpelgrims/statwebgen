@@ -1,5 +1,5 @@
 # statwebgen
-A simple static website generator, geared towards text-heavy content. It is dependent on [Python-Markdown](https://pypi.python.org/pypi/Markdown).
+A simple static website generator, geared towards text-heavy content. It is dependent on [Python-Markdown](https://pypi.python.org/pypi/Markdown). I use it for my persal website, found [here](www.jellepelgrims.me).
 
 ## Usage
 Statwebgen can be configured by creating a JSON file in the application folder, containing the project's name, the input directory, the output directory, and possibly a list of directories that will be ignored:
