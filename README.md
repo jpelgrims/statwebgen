@@ -13,6 +13,10 @@ A simple static website generator, geared towards text-heavy content. I use it f
 * To locally serve the generated website:
 
           $statwebgen.py serve
+ 
+* To automatically rebuild the website (only modified files):
+
+          $statwebgen.py auto
 
 * To publish the generated website to GitHub (commit to repo):
 
@@ -59,6 +63,8 @@ Description: About page.
 Created: 01/11/2016
 Updated: 13/11/2016
 Javascript: multilang.js
+
+## About
 
 My name is Jelle Pelgrims. I'm a university student in Belgium working on some personal projects in my free time. I have experience in the following subjects:
 
