@@ -40,7 +40,7 @@ A new static site project requires the following files in the input directory:
    * A stylesheet called 'style.css' (as specified in the default template)
    * A favicon called 'favicon.ico' (as specified in the default template)
    * A folder called 'posts' to store new blog posts
-   * A folder called 'javascripts' to store any javascript code
+   * A folder called 'javascript' to store any javascript code
 
 The site's layout and styling (including sidebar contents) can be changed by editing the template and the stylesheet.
 
