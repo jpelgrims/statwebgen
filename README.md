@@ -1,71 +1,62 @@
 # statwebgen
-A simple static website generator, geared towards text-heavy content. I use it for my persal website, found [here](www.jellepelgrims.me).
+A simple static website generator, meant for websites with text-heavy content. I use it for my persal website, found [here](http://www.jellepelgrims.com).
 
-## Dependencies
-   * [Python-Markdown](https://pypi.python.org/pypi/Markdown)
+## Features
+
+*   Create static websites from markdown files
+*   Html templating
+*   Automatic site rebuilding (no need to rebuild after every change)
+*   Server included
+*   Automated publishing with git or SFTP (TODO)
 
 ## Commands
 
-* To generate a static webite from the source directory:
+If no project or path is specified then statwebgen will try to use the present working directory.
 
-          $statwebgen.py build
+**To create a new website:**
 
-* To locally serve the generated website:
+~~~
+$statwebgen.py create [--skeleton <skeleton>] <name> <folder>
+~~~
 
-          $statwebgen.py serve
- 
-* To automatically rebuild the website (only modified files):
+If a *project skeleton* is specified then the new project will be created from the skeleton.
 
-          $statwebgen.py auto
+**To rebuild a static webite:**
 
-* To publish the generated website to GitHub (commit to repo):
+~~~
+statwebgen.py build [--auto] <project|path>
+~~~
 
-          $statwebgen.py publish "%comment%"
+The *auto* option will automatically regenerate the website on changes.
 
+**To serve a website:**
+~~~
+statwebgen.py serve [--browser] [--watch] <project|path>
+~~~
+
+The serve command will try to serve from the *.build* folder by default (if a project name is specified). The *browser* option opens the served website in the default browser. The *watch* option automatically rebuilds the websites if any files are changed (only works if a project name is specified).
 
 ## Usage
-Statwebgen can be configured by creating a JSON file in the application folder, containing the project's name, the input directory, the output directory, and possibly a list of directories that will be ignored:
 
-~~~~JSON
-{
-    "PROJECT_NAME": "project",
-    "INPUT_DIR": "c:\\...", 
-    "OUTPUT_DIR": "c:\\...", 
-    "EXCLUDE_DIR": []
-}
-~~~~
+A new webpage can be added by creating a new markdown file in the project directory. The page's layout and styling can be changed by editing the used templates and/or stylesheets.
 
-A new static site project requires the following files in the input directory:
-   * A template file called 'template.html' (if no template file is found, the default template found in the application directory will be used)
-   * A stylesheet called 'style.css' (as specified in the default template)
-   * A favicon called 'favicon.ico' (as specified in the default template)
-   * A folder called 'posts' to store new blog posts
-   * A folder called 'javascript' to store any javascript code
+The markdown file can (but is not required to) include meta-data for usage in template files. To use meta-data tags in html templates, simply place an '$' character followed by the tag's name in the template and statwebgen wil automatically replace it with the tag's value.
 
-The site's layout and styling (including sidebar contents) can be changed by editing the template and the stylesheet.
+The following meta-data tags are recognized and used by statwebgen. They will be replaced by default values if no value is set:
 
-A new webpage can be added by creating a new markdown file in the input directory. The markdown file should at the very least contain the required meta-information:
-
-   * **Type:** either 'page' for random website pages or 'post' for blog posts
-   * **Title:** page title 
-   * **Category:** page category (used for generating a blog page containg a list of all blog posts)
-   * **Description:** page description (used in the html 'description' meta-tag)
-   * **Created:** page creation date (DD/MM/YYYY)
-   * **Updated:** last update (DD/MM/YYYY)
+   * **Template:** the template file that is used.
+   * **Stylesheets:** a comma-delimited list of css stylesheets that will be applied to the used template
    * **Javascript:** a comma-delimited list of scripts that should be included
 
-Page content should be added one line after the meta-information. For example, an about page should look as follows:
+Meta-data loading ends when a "---" string is encountered. Page content should be added after this string. For example, an about page could look as follows:
 ~~~~
-Type: page
+Template: page.html
 Title: About
-Category: None
 Description: About page.
 Created: 01/11/2016
 Updated: 13/11/2016
-Javascript: multilang.js
-
-## About
-
+Javascript: default.js
+---
 My name is Jelle Pelgrims. I'm a university student in Belgium working on some personal projects in my free time. I have experience in the following subjects:
 
    * Software development in Python and C#
@@ -75,5 +66,32 @@ My name is Jelle Pelgrims. I'm a university student in Belgium working on some p
    * Dutch, English and Swedish
 ~~~~
 
-The static website can then be generated by simply running the command *'$statwebgen.py build'* in the shell. All markdown files found in the input directory (and subdirectories) will automatically be converted to html and saved in the output directory. All non-markdown files will be copied to the output directory. File hierarchy is maintained during site generation. 
+The static website can then be generated by simply running the *build* command in the shell. All markdown files found in the project directory (and subdirectories) will automatically be converted to html and saved in the output directory. All non-markdown files will be copied to the output directory. File hierarchy is maintained during site generation. 
 
+By default all files in folders (if present) called 'drafts' or 'templates' will be ignored while building and publishing. This can be modified in statwebgen's config file.
+
+## Internal workings
+
+### Templating functionality
+The templating works as follows:
+
+1. The html template is processed, and all *<!filename.html>* tags in the template are replaced with the content of the corresponding html files.
+2. The markdown file is converted to html and the *<!page-content>* tag in the template is replaced by the converted html.
+3. All meta-data tags in the template *( $tag )* are replaced by their values (as defined in the markdown file).
+
+### Dependencies
+   * [Python-Markdown](https://pypi.python.org/pypi/Markdown): markdown to html conversion
+   * [Pygments](http://pygments.org/): Code highlighting
+
+### Todo list
+
+* Add newly created projects to config list (project_name: project path) so project names can be used in commands instead of filepaths
+* Clean up argument parsing code
+* Make it so that all folders in the input directory that start with a "." are ignored when building the website
+* Add publishing functionality
+
+### Known bugs
+
+* Meta-data tags in html templates are simply replaced using a find & replace, so if you have a tag called 'sidebar' and a tag called 'sidebar_title' this may cause issues. Depending on the order in which the tags are replaced by their values one tag's value may end up overriding another tag's value.
+    * **Solution:** place tags between '$' signs instead of only putting one '$' in front of the tag
+* Meta-data list values: how to handle?
