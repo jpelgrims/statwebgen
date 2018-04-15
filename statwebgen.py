@@ -36,7 +36,7 @@ class Website:
         else:
             self.output_dir = output_dir.lower()
         
-        self.exclude_dir = ["\\old", "\\drafts", "\\.build", "\\templates"]
+        self.exclude_dir = [".old", ".drafts", ".build", ".templates"]
 
     def serve(self, port=8080, browser=False, directory=None):
         if not directory:
@@ -58,7 +58,7 @@ class Website:
         server.serve_forever()
         
     # only if github Website
-    # maybe add sftp publishing?
+    # maybe add sftp?.
     def publish(self, message):
         os.chdir(self.output_dir)
         os.system('git add --all')
@@ -88,7 +88,7 @@ class Website:
 
         # Copy other files to output directory
         for file in other_files:
-            copyfile = os.path.dirname(self.output_dir + file.lower().replace(self.input_dir,'')) + '\\' + os.path.basename(file)
+            copyfile = os.path.join(os.path.dirname(self.output_dir + file.lower().replace(self.input_dir,'')), os.path.basename(file))
             try:
                 os.makedirs(os.path.dirname(copyfile))
             except:
@@ -108,7 +108,7 @@ class Website:
 
         # Save all files as html
         for page in pages:
-            output_file = os.path.dirname(self.output_dir + page.input_file.lower().replace(self.input_dir,'')) + '\\' + os.path.splitext(os.path.basename(page.input_file))[0] + '.html'
+            output_file = os.path.join(os.path.dirname(self.output_dir + page.input_file.lower().replace(self.input_dir,'')), os.path.splitext(os.path.basename(page.input_file))[0] + '.html')
             page.save(output_file)
 
     # Check for modified files and only rebuild those
@@ -173,10 +173,10 @@ class Page:
     def _to_html(self):
         template = self.metadata.get("template")
         if template:
-            template = os.path.join(self.input_dir, 'templates' + '\\' + template)
+            template = os.path.join(self.input_dir, '.templates' + '\\' + template)
         else:
             # No template set, use default template
-            template = WORKING_DIR + '\\templates\default.html'
+            template = os.path.join(WORKING_DIR, 'templates', 'default.html')
 
         with open(template, 'r') as file:
             layout = file.read()
@@ -194,7 +194,7 @@ class Page:
             scripts = self.metadata.get('javascript')
             if isinstance(scripts, str):
                 scripts = [scripts]
-            script_includes = "".join(["<script type='text/javascript' async src='./javascript/{}'></script>\n".format(script) for script in scripts if not 'mathjax.js' in script])
+            script_includes = "".join(["<script type='text/javascript' async src='/js/{}'></script>\n".format(script) for script in scripts if not 'mathjax.js' in script])
         
             # Check for mathjax/aes because they need a special include due to it being loaded from an external source
             if 'mathjax.js' in self.metadata.get('javascript'):
@@ -218,7 +218,7 @@ class Page:
         # HTML substitutions
 
         # Get list of all html files in templates dir
-        for dir,_,_ in os.walk('templates' + '\\'):
+        for dir,_,_ in os.walk('.templates'):
             html_files.extend(glob.glob(os.path.join(dir,pattern)))
         
         html_substitutions = {}
