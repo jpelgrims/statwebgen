@@ -11,10 +11,51 @@ import socketserver
 
 import json
 import markdown
+import argparse
+import signal
 
+from jinja2 import Template
 
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__)).lower()
 
-WORKING_DIR = os.path.dirname(os.path.realpath(__file__))
+# Parser for page front matter
+#    * Simple key/value pairings
+#    * Comma-separated lists between brackets
+#    * Keys are case insensitive
+
+class FMML():
+
+    @staticmethod
+    def load(filepath):
+        with open(filepath, 'r') as f:
+            return FMML.parse_text(f.read())
+
+    @staticmethod
+    def parse_text(raw_text):
+        front_matter = {}
+        lines = raw_text.split("\n")
+        for line in lines:
+            if ":" in line:
+                key, value = (item.strip() for item in line.split(": "))
+                if value.startswith("[") and value.endswith("]"):
+                    value = [item.strip() for item in value[1:-1].split(",")]
+                front_matter[key.lower()] = value
+            else:
+                continue
+        return front_matter
+    
+    @staticmethod
+    def save(data, output_file):
+        lines = []
+        for key, value in data.items():
+            if isinstance(value, list):
+                lines.append(str(key) + ": " + "[" + ",".join(value) + "]")
+            else:
+                lines.append(str(key) + ": " +  str(value))
+
+        with open(output_file, 'w') as f:
+            f.write("\n".join(lines))
+            
 
 class StaticWebsiteHandler(http.server.SimpleHTTPRequestHandler):
 
@@ -24,6 +65,13 @@ class StaticWebsiteHandler(http.server.SimpleHTTPRequestHandler):
             return root + path + ".html"
         else:
             return root + path
+    
+    @staticmethod
+    def signal_handler(signal, frame):
+        print('Shutting down web server...')
+        sys.exit(0)
+
+signal.signal(signal.SIGINT, StaticWebsiteHandler.signal_handler)
 
 
 class Website:
@@ -36,7 +84,7 @@ class Website:
         else:
             self.output_dir = output_dir.lower()
         
-        self.exclude_dir = [".old", ".drafts", ".build", ".templates"]
+        self.exclude_dir = [f.name for f in os.scandir(self.input_dir) if f.is_dir() and f.name.startswith(".")]
 
     def serve(self, port=8080, browser=False, directory=None):
         if not directory:
@@ -56,63 +104,58 @@ class Website:
 
         print("Serving at port", port)
         server.serve_forever()
-        
-    # only if github Website
-    # maybe add sftp?.
+
+    # Only if github pages website
     def publish(self, message):
         os.chdir(self.output_dir)
         os.system('git add --all')
         os.system('git commit -m "{}"'.format(message))
         os.system('git push')
 
-
     def _scan(self):
-        # Returns a list of all files in the project directory and all subdirectories (except exluded files & directories)
         files = []
         pattern   = "*"
 
         for dir,_,_ in os.walk(self.input_dir):
             files.extend(glob.glob(os.path.join(dir,pattern)))
         
-        files = [file for file in files if not any(dir in file for dir in self.exclude_dir) ]
+        files = [file for file in files if not any(dir in file for dir in self.exclude_dir) and not os.path.isdir(file) ]
 
         return files
 
+    def _get_output_path(self, input_path):
+        output_path = os.path.join(self.output_dir, os.path.relpath(input_path, self.input_dir))
+ 
+        if output_path.endswith(".md"):
+            output_path = output_path.rstrip(".md") + '.html'
+        return output_path
+
     def build(self, files=None):
+        # Load project data and globals
+        data = {}
+
+        # Get list of all files in project
         if files is None:
             files = self._scan()
-
+        
         # Sort files into markdown and other
-        md_files = [file for file in files if ".md" in file and os.path.isfile(file)]
-        other_files = [file for file in files if not ".md" in file in file and os.path.isfile(file)]
+        md_files = [file for file in files if ".md" in file]
+        other_files = [file for file in files if not ".md" in file]
 
         # Copy other files to output directory
         for file in other_files:
-            copyfile = os.path.join(os.path.dirname(self.output_dir + file.lower().replace(self.input_dir,'')), os.path.basename(file))
-            try:
-                os.makedirs(os.path.dirname(copyfile))
-            except:
-                pass
-            shutil.copyfile(file, copyfile)
+            output_path = self._get_output_path(file)
+            if not os.path.exists(os.path.dirname(output_path)):
+                os.makedirs(os.path.dirname(output_path))
+            shutil.copyfile(file, output_path)
 
-        # Turn all markdown files into Page objects
-        pages = []
-
+        # Process markdown files
         for md_file in md_files:
-            try:
-                page = Page(filepath=md_file, input_dir=self.input_dir)
-                pages.append(page)
-            except Exception as error:
-                print("   * An error occured while trying to parse {} meta-data.".format(os.path.basename(md_file)))
-                print(error)
-
-        # Save all files as html
-        for page in pages:
-            output_file = os.path.join(os.path.dirname(self.output_dir + page.input_file.lower().replace(self.input_dir,'')), os.path.splitext(os.path.basename(page.input_file))[0] + '.html')
-            page.save(output_file)
+            content, metadata = Page.parse(md_file)
+            render = Page.render(self.input_dir, content, metadata, data={})
+            Page.save(render, self._get_output_path(md_file))
 
     # Check for modified files and only rebuild those
-    # Currently works with metadata, but will maybe add hashing in future
     def autobuild(self):
         last_modified = {}
         while True:
@@ -133,218 +176,108 @@ class Website:
                 self.build(files=modified_files)
             time.sleep(1)
 
+
 class Page:
+    
+    @staticmethod
+    def save(page, filepath):
+        if not os.path.exists(os.path.dirname(filepath)):
+            os.makedirs(os.path.dirname(filepath))
 
-    def __init__(self, filepath=None, input_dir=None):
-        if filepath:
-            self.load(filepath=filepath)
+        with open(filepath, 'w') as file:
+            file.write(page) 
 
-        self.input_dir = None
-        if input_dir:
-            self.input_dir = input_dir
-
-    def load(self, filepath=None, page=None):
-
-        if filepath:
-            self.input_file = filepath
-            with open(self.input_file, 'r') as file:
-                page = file.readlines()
-
-        metadata = {}
-        
-        start_index = 0
-        if "---\n" in page: # Check to see if page actually includes meta-data
-            for i in range(len(page)-1):
-                if "---" in page[i]:
-                    start_index = i+1
-                    break
-                temp = page[i].split(":")
-                tag, data = temp[0].lower(), temp[1].strip()
-                if "," in data:
-                    data = data.split(",")
-                    data = [element.strip() for element in data]
-                metadata[tag] = data
-        
-        self.filename = os.path.basename(os.path.splitext(self.input_file)[0])
-
-        self.raw_content = "".join(page[start_index:])
-        self.metadata = metadata
-
-    def _to_html(self):
-        template = self.metadata.get("template")
-        if template:
-            template = os.path.join(self.input_dir, '.templates' + '\\' + template)
-        else:
-            # No template set, use default template
-            template = os.path.join(WORKING_DIR, 'templates', 'default.html')
-
-        with open(template, 'r') as file:
-            layout = file.read()
-
-        # 'codehilite' for code highlighting, 
+    @staticmethod
+    def render(project_dir, page_content, metadata, data):
+        # 'codehilite' for code highlighting
         # 'fenced_code' for code block definitions
         # 'toc' for table of contents
         # 'extra' for markdown inside html blocks
-
         md = markdown.Markdown(extensions=['fenced_code', 'toc', 'extra'])
-        html = md.convert(self.raw_content)
+        page_content = md.convert(page_content)
+        template_path = os.path.join(project_dir, ".templates", metadata.get("template", ""))
+        if not os.path.exists(template_path) or not os.path.isfile(template_path):
+            template_path = os.path.join(SCRIPT_DIR, "templates", "default.html")
 
-        script_includes = ""
-        if self.metadata.get('javascript') is not None:
-            scripts = self.metadata.get('javascript')
-            if isinstance(scripts, str):
-                scripts = [scripts]
-            script_includes = "".join(["<script type='text/javascript' async src='/js/{}'></script>\n".format(script) for script in scripts if not 'mathjax.js' in script])
-        
-            # Check for mathjax/aes because they need a special include due to it being loaded from an external source
-            if 'mathjax.js' in self.metadata.get('javascript'):
-                script_includes += "<script type='text/javascript' async src='https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML'></script>\n"
+        with open(template_path) as f:
+            template = Template(f.read())
 
-        css_includes = ""
-        if self.metadata.get('stylesheets') is not None:
-            sheets = self.metadata.get('stylesheets')
-            #print(sheets)
-            if isinstance(sheets, str):
-                sheets = [sheets]
-            css_includes = "".join(["<link rel='stylesheet' type='text/css' href='/css/{}' />\n".format(sheet) for sheet in sheets])
+        return template.render(content=page_content, 
+                                 metadata=metadata,
+                                 data=data)
 
-        html_page = layout
+    @staticmethod
+    def parse(file):
+        raw_page = None
+        with open(file, "r") as f:
+            raw_page = f.read()
 
-        # replace all html includes (for footers and navbars and stuff)
+        # Extract metadata
+        index = raw_page.find("---")
+        raw_metadata = raw_page[0:index].replace("---\n", "")
+        metadata = FMML.parse_text(raw_metadata)
 
-        html_files = []
-        pattern   = "*.html"
+        # Extract page content
+        content = raw_page[index:].strip("\n").strip("---")
 
-        # HTML substitutions
+        return content, metadata
 
-        # Get list of all html files in templates dir
-        for dir,_,_ in os.walk('.templates'):
-            html_files.extend(glob.glob(os.path.join(dir,pattern)))
-        
-        html_substitutions = {}
-        for html_file in html_files:
-            with open(html_file) as file:
-                html_content = file.read()
-            html_substitutions["<!" + os.path.basename(html_file) + ">"] = html_content
 
-        for tag, tag_content in html_substitutions.items():
-            html_page = html_page.replace(tag, tag_content)
+def process_arguments(arguments):
+    config_file = os.path.join(SCRIPT_DIR, 'config.ini')
+    config = FMML.load(config_file)
 
-        # Meta-data substitutions
+    # Use the path from the config file if a project is specified in the arguments
+    project_path = arguments.path
+    if arguments.project:
+        if arguments.project in config.keys():
+            project_path = config[arguments.project]
+        else:
+            if not arguments.create:
+                print("The specified project does not exist.")
+                exit(0)
 
-        substitutions = {'<!javascript>': script_includes,
-                         '<!stylesheets>': css_includes,
-                         '<!page-content>': html}
+    if arguments.create and arguments.project:
 
-        for tag, tag_content in substitutions.items():
-            html_page = html_page.replace(tag, tag_content)
-        
-        for tag, value in self.metadata.items():
-            html_page = html_page.replace("$"+tag, str(value))
-        
-        return html_page
+        config[arguments.project] = arguments.path
 
-    def save(self, filepath):
-        # Make sure directory exists, if not, create it
-        try:
-            os.makedirs(os.path.dirname(filepath))
-        except:
-            pass
-        with open(filepath, 'w') as file:
-            file.write(self._to_html())
-
-def get_project_directory(path_or_name):
-
-    config = {}
-    with open(os.path.join(WORKING_DIR, 'config.json'), 'r') as f: 
-        contents = f.read()
-        config = json.loads(contents)
-
-    if os.path.exists(path_or_name):
-        return path_or_name
-    elif path_or_name in config.keys():
-        return config[path_or_name]
-    else:
-        return None
-
-def main(argv):
-
-    config = {}
-    with open(os.path.join(WORKING_DIR, 'config.json'), 'r') as f: 
-        contents = f.read()
-        config = json.loads(contents)
-
-    if argv[0] == 'create':
-
-        if len(argv) >= 3:
-            skeleton = "default"
-            name = argv[-2]
-            path = argv[-1]
-
-            if "--skeleton" in argv:
-                skeleton = argv[2]
-            
+        if arguments.skeleton:
             try:
-                copy_tree(os.path.join(WORKING_DIR, "skeletons", skeleton), path)
+                copy_tree(os.path.join(SCRIPT_DIR, "skeletons", arguments.skeleton), arguments.path)
             except:
                 print("Something went wrong while creating a new project.")
-
-            config[name] = path
-            print("Project {} was successfully created.".format(name))
-
-    elif argv[0] == 'serve':
-        open_browser = False
-
-        project_dir = os.path.join(get_project_directory(argv[-1]), ".build")
-        website = Website(project_dir)
-
-        if len(argv) >= 3:
-
-            small_browser_flag = len(argv[1]) <= 3 and argv[1].startswith("-") and "b" in argv[1]
-            large_browser_flag = "--browser" in argv
-
-            if small_browser_flag or large_browser_flag:
-                open_browser = True
-
-            small_watch_flag = len(argv[1]) <= 3 and argv[1].startswith("-") and "w" in argv[1]
-            large_watch_flag = "--watch" in argv
-
-            if small_watch_flag or large_watch_flag:
-                thread = threading.Thread(target=website.autobuild)
-                thread.daemon = True
-                thread.start()
-
-        website.serve(port=8000, browser=open_browser, directory=project_dir)
-
-    elif argv[0] == 'build':
-
-        if len(argv) >= 2:
-            output_dir = None
-
-            if argv[1] in ["-a", "--auto"]:
-                if len(argv) == 3:
-                    project_dir = get_project_directory(argv[-1])
-                elif len(argv) == 4:
-                    project_dir = get_project_directory(argv[-2])
-                    output_dir = argv[-1]
-                website = Website(project_dir, output_dir=output_dir)
-                website.autobuild()
-            else:
-                if len(argv) == 2:
-                    project_dir = get_project_directory(argv[-1])
-                elif len(argv) == 3:
-                    project_dir = get_project_directory(argv[-2])
-                    output_dir = argv[-1]
-                website = Website(project_dir, output_dir=output_dir)
-                website.build()
-
-            print("Website build complete.")
         
-    elif argv[0] == 'publish':
-        pass  
+        print("Project '{}' was successfully created in {}.".format(arguments.project, arguments.path))
+        FMML.save(config, config_file)
     
-    with open(os.path.join(WORKING_DIR, 'config.json'), 'w') as f: 
-        f.write(json.dumps(config))
+    if arguments.build or arguments.watch:
+        website = Website(project_path)
+        if arguments.build:
+            website.build()
+            print("Website build complete.")
+        elif arguments.watch:
+            thread = threading.Thread(target=website.autobuild)
+            thread.daemon = True
+            thread.start()
+        
+    if arguments.serve:
+        website = Website(project_path)
+        website.serve(port=8000, browser=arguments.open)
 
-if __name__ == "__main__":
-   main(sys.argv[1:])
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Statwebgen - Static website generator')
+    parser.add_argument('-v', '--version', action='version', version='statwebgen 0.1')
+    parser.add_argument('-c', '--create', action='store_true', help='Create a project')
+    parser.add_argument('--skeleton', help='Choose a project skeleton')
+    parser.add_argument('--project', help='Choose a project')
+    parser.add_argument('-b', '--build', action='store_true', help='Build the project')
+    parser.add_argument('-w', '--watch', action='store_true', help='Automatically rebuild the project on changes')
+    parser.add_argument('-s', '--serve', action='store_true', help='Serve the project locally')
+    parser.add_argument('-o', '--open', action='store_true', help='Open the project in the default browser')
+    parser.add_argument('-p', '--publish', action='store_true', help='Publish the project')
+    parser.add_argument('path', nargs='?', action='store', type=str, default=os.getcwd(), help='Project file path, defaults to current working directory')
+    return parser.parse_args()
+
+if __name__ == '__main__':
+    args = parse_arguments()
+    process_arguments(args)
