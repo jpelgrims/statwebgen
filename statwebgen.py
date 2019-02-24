@@ -27,7 +27,7 @@ class FMML():
 
     @staticmethod
     def load(filepath):
-        with open(filepath, 'r') as f:
+        with open(filepath, 'r', encoding="utf-8") as f:
             return FMML.parse_text(f.read())
 
     @staticmethod
@@ -53,7 +53,7 @@ class FMML():
             else:
                 lines.append(str(key) + ": " +  str(value))
 
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding="utf-8") as f:
             f.write("\n".join(lines))
             
 
@@ -184,7 +184,7 @@ class Page:
         if not os.path.exists(os.path.dirname(filepath)):
             os.makedirs(os.path.dirname(filepath))
 
-        with open(filepath, 'w') as file:
+        with open(filepath, 'w', encoding="utf-8") as file:
             file.write(page) 
 
     @staticmethod
@@ -199,17 +199,18 @@ class Page:
         if not os.path.exists(template_path) or not os.path.isfile(template_path):
             template_path = os.path.join(SCRIPT_DIR, "templates", "default.html")
 
-        with open(template_path) as f:
+        with open(template_path, encoding="utf-8") as f:
             template = Template(f.read())
 
-        return template.render(content=page_content, 
+        return template.render(content=page_content,
+                                toc=md.toc, 
                                  metadata=metadata,
                                  data=data)
 
     @staticmethod
     def parse(file):
         raw_page = None
-        with open(file, "r") as f:
+        with open(file, "r", encoding="utf-8") as f:
             raw_page = f.read()
 
         # Extract metadata
