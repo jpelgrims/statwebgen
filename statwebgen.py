@@ -8,6 +8,7 @@ import time
 import threading
 import http.server
 import socketserver
+import webbrowser
 
 import json
 import markdown
@@ -57,7 +58,68 @@ class FMML():
             f.write("\n".join(lines))
             
 
+class LiveRefreshHandler(http.server.SimpleHTTPRequestHandler):
+    
+    def do_GET(self):
+        # Endpoint for checking if live refresh is required
+        if self.path == '/_refresh':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+
+            message = json.dumps({"refresh": self.server.refresh_required}).encode("utf-8")
+            self.wfile.write(message)
+
+            self.server.refresh_required = False
+
+    def end_headers(self):
+        # Allow CORS
+        self.send_header('Access-Control-Allow-Origin', '*')
+        super().end_headers()
+
+    @staticmethod
+    def signal_handler(signal, frame):
+        print('Shutting down web server...')
+        sys.exit(0)
+
+
+class LiveRefreshServer(socketserver.TCPServer):
+
+    def __init__(self, server_address):
+        self.refresh_required = False
+        super().__init__(server_address, LiveRefreshHandler)
+
+    def serve_forever(self):
+        super().serve_forever()
+    
+    def notify(self):
+        self.refresh_required = True
+
 class StaticWebsiteHandler(http.server.SimpleHTTPRequestHandler):
+
+    def do_GET(self):
+        f = self.send_head()
+        if f:
+            try:
+                if f.name.endswith(".html"):
+                    lines = f.readlines()
+
+                    for line in lines:
+
+                        # Insert live-refresh script in head
+                        if b"</head>" in line:
+                            self.wfile.write('<script>'.encode('utf-8'))
+
+                            with open(os.path.join(SCRIPT_DIR, 'live_refresh.js'), 'r') as j:
+                                self.wfile.write(j.read().encode('utf-8'))
+                            
+                            self.wfile.write('</script>'.encode('utf-8'))
+                        self.wfile.write(line)
+                else:
+                    self.copyfile(f, self.wfile)
+
+            finally:
+                f.close()
 
     def translate_path(self,path):
         root = os.getcwd()
@@ -65,13 +127,15 @@ class StaticWebsiteHandler(http.server.SimpleHTTPRequestHandler):
             return root + path + ".html"
         else:
             return root + path
-    
+
     @staticmethod
     def signal_handler(signal, frame):
         print('Shutting down web server...')
         sys.exit(0)
 
+# Set handler function for SIGINT signal (i.e. Control-C)
 signal.signal(signal.SIGINT, StaticWebsiteHandler.signal_handler)
+signal.signal(signal.SIGINT, LiveRefreshHandler.signal_handler)
 
 
 class Website:
@@ -100,7 +164,7 @@ class Website:
                 port += 1
         
         if browser:
-            os.startfile("http://localhost:{}/".format(port))
+            webbrowser.open("http://localhost:{}/".format(port), new=0)
 
         print("Serving at port", port)
         server.serve_forever()
@@ -112,14 +176,17 @@ class Website:
         os.system('git commit -m "{}"'.format(message))
         os.system('git push')
 
-    def _scan(self):
+    def _scan(self, pattern="*", include_templates=False):
         files = []
-        pattern   = "*"
+        pattern   = pattern
 
         for dir,_,_ in os.walk(self.input_dir):
             files.extend(glob.glob(os.path.join(dir,pattern)))
         
         files = [file for file in files if not any(dir in file for dir in self.exclude_dir) and not os.path.isdir(file) ]
+
+        if include_templates:
+            files.extend(glob.glob(os.path.join(self.input_dir,".templates", "*.html")))
 
         return files
 
@@ -156,10 +223,10 @@ class Website:
             Page.save(render, self._get_output_path(md_file))
 
     # Check for modified files and only rebuild those
-    def autobuild(self):
+    def autobuild(self, server):
         last_modified = {}
         while True:
-            files = self._scan()
+            files = self._scan(include_templates=True)
             modified_files = []
             for file in files:
                 if file not in last_modified.keys():
@@ -170,10 +237,30 @@ class Website:
                     # File modified since last scan
                     modified_files.append(file)
                     last_modified[file] = os.stat(file)[8]
-            if len(modified_files) > 0:
+
+            # Look for changed templates
+            build_files = []
+            for file in modified_files:
+                if file.endswith(".html"):
+
+                    # Find all md files that use the changed template
+                    md_files = [f for f in files if ".md" in f]
+                    print(os.path.basename(file))
+                    for md_file in md_files:
+                        content, metadata = Page.parse(md_file)
+
+                        if metadata.get("template", None) == os.path.basename(file):
+                            build_files.append(md_file)
+                else:
+                    build_files.append(file)
+
+            if len(build_files) > 0:
                 print('')
-                print("{} file(s) modified, rebuilding...".format(len(modified_files)))
-                self.build(files=modified_files)
+                print("{} file(s) modified, rebuilding...".format(len(build_files)))
+                self.build(files=build_files)
+
+                # Notify autorefresh server
+                server.notify()
             time.sleep(1)
 
 
@@ -257,7 +344,13 @@ def process_arguments(arguments):
             website.build()
             print("Website build complete.")
         elif arguments.watch:
-            thread = threading.Thread(target=website.autobuild)
+            # Live refresh endpoint
+            server = LiveRefreshServer(("", 8001))
+            thread = threading.Thread(target=server.serve_forever)
+            thread.daemon = True
+            thread.start()
+
+            thread = threading.Thread(target=website.autobuild, args=(server,))
             thread.daemon = True
             thread.start()
         
