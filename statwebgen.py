@@ -19,6 +19,10 @@ from jinja2 import Template
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__)).lower()
 
+REFRESH_SCRIPT = ""
+with open(os.path.join(SCRIPT_DIR, 'live_refresh.js'), 'r') as j:
+    REFRESH_SCRIPT = '<script>' + j.read() + '</script>'
+
 # Parser for page front matter
 #    * Simple key/value pairings
 #    * Comma-separated lists between brackets
@@ -97,6 +101,27 @@ class LiveRefreshServer(socketserver.TCPServer):
 
 class StaticWebsiteHandler(http.server.SimpleHTTPRequestHandler):
 
+    def modify_header(self, keyword, value):
+        for i in range(len(self._headers_buffer)):
+            item = self._headers_buffer[i]
+            if keyword.encode('utf-8') in item:
+                 del self._headers_buffer[i]
+                 self.send_header(keyword, value)
+                 break
+
+    def end_headers(self):
+        path = self.translate_path(self.path)
+
+        if self.guess_type(path) == "text/html":
+
+            f = open(path, 'rb')
+            fs = os.fstat(f.fileno())
+
+            # Set correct Content-length (file length + length of refresh script)
+            self.modify_header("Content-Length", str(fs[6] + len(REFRESH_SCRIPT)))
+        super().end_headers()
+
+
     def do_GET(self):
         f = self.send_head()
         if f:
@@ -105,16 +130,14 @@ class StaticWebsiteHandler(http.server.SimpleHTTPRequestHandler):
                     lines = f.readlines()
 
                     for line in lines:
-
                         # Insert live-refresh script in head
                         if b"</head>" in line:
-                            self.wfile.write('<script>'.encode('utf-8'))
+                            self.wfile.write(REFRESH_SCRIPT.encode('utf-8'))
 
-                            with open(os.path.join(SCRIPT_DIR, 'live_refresh.js'), 'r') as j:
-                                self.wfile.write(j.read().encode('utf-8'))
-                            
-                            self.wfile.write('</script>'.encode('utf-8'))
                         self.wfile.write(line)
+
+                        
+
                 else:
                     self.copyfile(f, self.wfile)
 
