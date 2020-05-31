@@ -2,3 +2,5 @@ __pycache__/*
 skeletons/*
 templates/*
 config.ini
+.vscode/
+config.json
