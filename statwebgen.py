@@ -97,12 +97,22 @@ def build_project(arguments, config):
 def watch_project(arguments, config):
     input_dir, output_dir = get_project_config(arguments, config)
     website = Website(input_dir)
-    website.autobuild()
+
+    # Set up kill flag
+    kill_switch = threading.Event()
+    kill_switch.clear()
+
+    try: 
+        website.autobuild(kill_switch)
+    except KeyboardInterrupt:
+        kill_switch.set()
 
 def serve_project(arguments, config):
     # Initial project build, so the server has something to serve
     input_dir, output_dir = get_project_config(arguments, config)
-    website = Website(input_dir)
+    print(input_dir)
+    print(output_dir)
+    website = Website(input_dir, output_dir=output_dir)
     website.build()
 
     # Set up kill flag
@@ -120,15 +130,17 @@ def serve_project(arguments, config):
     autobuild_thread.start()
 
     try:
-        # Serve project build
         port = 8002
-        website_server = StaticWebsiteServer(("", port), output_dir)
-        website_server.serve_forever()
-        print("Serving at port", port)
 
         # Open webbrowser
         if arguments.browse:
-            webbrowser.open("http://localhost:{}/".format(port), new=0)
+            # Note to self: this won't be able to open a browser if testing on WSL
+            webbrowser.open("http://localhost:{}/".format(port), new=2)
+
+        # Serve project build
+        website_server = StaticWebsiteServer(("", port), output_dir)
+        website_server.serve_forever()
+        print("Serving at port", port)
     except KeyboardInterrupt:
         website_server.server_close()
         kill_switch.set()

@@ -4,3 +4,4 @@ templates/*
 config.ini
 .vscode/
 config.json
+.build

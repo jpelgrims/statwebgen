@@ -12,6 +12,7 @@ import json
 import markdown
 import argparse
 
+from markdown_extensions import AsideExtension
 from markdown.extensions.toc import TocExtension
 from parsing import FrontMatterParser
 from jinja2 import Template
@@ -144,7 +145,7 @@ class Page:
         # 'fenced_code' for code block definitions
         # 'toc' for table of contents
         # 'extra' for markdown inside html blocks
-        md = markdown.Markdown(extensions=['fenced_code', TocExtension(baselevel=2), 'extra', 'wikilinks'])
+        md = markdown.Markdown(extensions=[AsideExtension(), 'fenced_code', TocExtension(baselevel=1), 'extra', 'wikilinks'])
         page_content = md.convert(page_content)
         template_path = os.path.join(project_dir, ".templates", metadata.get("template", ""))
         if not os.path.exists(template_path) or not os.path.isfile(template_path):

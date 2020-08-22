@@ -110,14 +110,24 @@ class StaticWebsiteHandler(http.server.SimpleHTTPRequestHandler):
             finally:
                 f.close()
 
+
+
     def translate_path(self,path):
         root = os.getcwd()
-        #path = path.replace("/", "\\")
+
+        final_path =""
 
         if path[-1] != "/" and not "." in path[-5:]:
-            return root + path + ".html"
+            final_path = root + path + ".html"
         else:
-            return root + path
+            final_path = root + path
+        
+        if os.name == 'nt':
+            final_path = final_path.replace("/", "\\")
+        
+        return final_path
+
+
 
 
 class StaticWebsiteServer(socketserver.TCPServer):
