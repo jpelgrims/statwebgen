@@ -13,7 +13,7 @@ yargs
             server.enableAutoRefresh();
         }
 
-        server.listen(argv.port);
+        server.run(argv.port);
 })
 .option('path', {
     alias: 'p',

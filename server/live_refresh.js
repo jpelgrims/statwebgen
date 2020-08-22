@@ -25,7 +25,7 @@ function refreshPage()
     }
 
     // Shouldn't be hardcoded
-    xmlHttp.open("GET", "http://localhost:5000/_refresh/test", true);
+    xmlHttp.open("GET", "http://localhost:<port>/_refresh/long_poll", true);
     xmlHttp.send(null);
 }
 
