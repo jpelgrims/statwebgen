@@ -1,0 +1,16 @@
+{
+  "name": "statwebgen-dev-server",
+  "version": "1.0.0",
+  "description": "Development server for statwebgen",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Jelle Pelgrims",
+  "license": "ISC",
+  "dependencies": {
+    "yargs": "^15.4.1"
+  }
+}
