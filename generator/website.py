@@ -32,13 +32,6 @@ class Website:
         
         self.exclude_dir = [f.name for f in os.scandir(self.input_dir) if f.is_dir() and f.name.startswith(".")]
 
-    # Only if github pages website
-    def publish(self, message):
-        os.chdir(self.output_dir)
-        os.system('git add --all')
-        os.system('git commit -m "{}"'.format(message))
-        os.system('git push')
-
     def _scan(self, pattern="*", include_templates=False):
         files = []
         pattern   = pattern
@@ -120,11 +113,7 @@ class Website:
                 print('')
                 print("{} file(s) modified, rebuilding...".format(len(build_files)))
                 self.build(files=build_files)
-
-                # Notify autorefresh server
-                if server:
-                    server.notify()
-            time.sleep(1)
+            time.sleep(0.2)
         print("Shutting down autobuild process...")
         sys.exit(0)
 
