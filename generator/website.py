@@ -30,7 +30,8 @@ class Website:
         else:
             self.output_dir = output_dir
         
-        self.exclude_dir = [f.name for f in os.scandir(self.input_dir) if f.is_dir() and f.name.startswith(".")]
+        self.exclude_dir = [f.name for f in os.scandir(self.input_dir) if f.is_dir() and f.name.startswith(".")] + [self.output_dir]
+        print(self.exclude_dir)
 
     def _scan(self, pattern="*", include_templates=False):
         files = []
@@ -40,7 +41,6 @@ class Website:
             files.extend(glob.glob(os.path.join(dir,pattern)))
         
         files = [file for file in files if not any(dir in file for dir in self.exclude_dir) and not os.path.isdir(file) ]
-
         if include_templates:
             files.extend(glob.glob(os.path.join(self.input_dir,".templates", "*.html")))
 
