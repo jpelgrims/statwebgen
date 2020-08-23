@@ -5,7 +5,7 @@ import fs from "fs";
 import path from 'path';
 import FileProcessor from './file_processor.js';
 
-const REFRESH_SCRIPT_PATH = './live_refresh.js'
+const REFRESH_SCRIPT_PATH = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), 'live_refresh.js'); 
 
 function urlToPath(requestUrl, baseDirectory) {
     let filePath;
@@ -77,7 +77,6 @@ function urlMatch(urlPattern, url) {
 }
 
 const requestListener = async function (request, response) {
-    console.log(request.url);
     try {
         for (const [urlPattern, requestHandler] of Object.entries(this.requestHandlers)) {
             if (urlMatch(urlPattern, request.url)) {
@@ -87,10 +86,12 @@ const requestListener = async function (request, response) {
         }
         // Handle all requests that fell through
         this.defaultHandler(request, response, this);
+        console.log(`[Request => 200]: ${request.url}`);
    } catch(e) {
         response.writeHead(500)
         response.end()     // end the response so browsers don't hang
         console.log(e.stack)
+        console.log(`[Request => 500]: ${request.url}`);
    }
 };
 

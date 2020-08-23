@@ -37,6 +37,7 @@ def build_project(args):
     print("Website build complete.")
 
 def watch_project(args):
+    print(f"Started statwebgen\n\tWatching '{args.input_dir}' for changes\n\tOutput in '{args.output_dir}'")
     website = Website(args.input_dir)
 
     # Set up kill flag
@@ -65,5 +66,4 @@ def main(args):
 
 if __name__ == "__main__":
     arguments = parser.parse_args()
-    print(arguments)
     main(arguments)

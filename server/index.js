@@ -4,7 +4,6 @@ import createServer from './server.js';
 yargs
 .command('serve [port]', 'Run a development server', (yargs) => {
     yargs.positional('port', {describe: 'port to bind on', default: 5000})}, (argv) => {
-        if (argv.verbose) {console.info(`start server on :${argv.port}`)};
 
         const directory = argv.path ? argv.path : process.cwd();
 
@@ -12,6 +11,8 @@ yargs
         if (argv.autorefresh) {
             server.enableAutoRefresh();
         }
+
+        console.info(`Dev-server running on port ${argv.port}, serving from from ${directory}`)
 
         server.run(argv.port);
 })
@@ -24,10 +25,5 @@ yargs
     alias: 'r',
     type: 'boolean',
     description: 'Automatically reload current page on changes'
-})
-.option('verbose', {
-    alias: 'v',
-    type: 'boolean',
-    description: 'Run with verbose logging'
 })
 .argv
