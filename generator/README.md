@@ -68,4 +68,3 @@ optional arguments:
 ### Dependencies
    * [Python-Markdown](https://pypi.python.org/pypi/Markdown): markdown to html conversion
    * [Jinja2](http://jinja.pocoo.org/): templating
-   * [toml](https://pypi.org/project/toml/): front matter

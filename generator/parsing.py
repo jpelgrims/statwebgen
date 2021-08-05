@@ -1,109 +1,74 @@
 import json
 
 
-class FrontMatterParser:
+def contains_frontmatter(raw_text):
+    lines = raw_text.split("\n")
+    text_contains_fences = lines[0].startswith("---") and (len([line for line in lines if line.startswith("---")]) >= 2)
+    return text_contains_fences
 
-    # Returns boolean indicating if the text contains front matter
-    @staticmethod
-    def contains_frontmatter(raw_text):
-        lines = raw_text.split("\n")
-        text_contains_fences = lines[0].startswith("---") and (len([line for line in lines if line.startswith("---")]) >= 2)
-        contains_frontmatter_type = not lines[0].endswith("---")
-        return text_contains_fences and contains_frontmatter_type
-    
-    @staticmethod
-    def can_parse(frontmatter_type):
-        return get_parsers().get(frontmatter_type) is not None
+def load_markdown_file(filepath):
+    with open(filepath, 'r', encoding="utf-8") as f:
+        raw_text = f.read()
+    return parse_markdown(raw_text)
 
-    @staticmethod
-    def get_frontmatter_type(raw_text):
-        lines = raw_text.split("\n")
-        return lines[0].lstrip("-")
-    
-    # Returns frontmatter without fences
-    @staticmethod
-    def get_frontmatter(raw_text):
-        front_matter = raw_text.split("---\n")[0].rstrip("\n")
-        lines = front_matter.split("\n")
-        return "\n".join(lines[1:])
+# Loads markdown text and returns content and frontmatter separately
+def parse_markdown(raw_text: str) -> (str, dict):
+    """
+    Parses the given markdown string and separates the frontmatter from the markdown (if any)
 
-    # Returns boolean indicating if the text contains valid front matter
-    @classmethod
-    def validate_text(cls, raw_text):
-        if cls.contains_frontmatter(raw_text):
-            frontmatter_type = cls.get_frontmatter_type(raw_text)
-            return cls.can_parse(frontmatter_type)
-        return False
-    
-    # Parses raw text and returns dictionary containing front matter data
-    @classmethod
-    def parse_text(cls, raw_text):
-        if cls.validate_text(raw_text):
-            frontmatter_type = raw_text.split("\n")[0].lstrip("-")
-            frontmatter_content = cls.get_frontmatter(raw_text)
-            parser = get_parsers().get(frontmatter_type)
-            return parser(frontmatter_content)
-        else: 
-            raise ValueError("Invalid frontmatter")
+    Args:
+        raw_text (str): [description]
 
-    # Loads file and returns dictionary containing front matter data
-    @classmethod
-    def parse_file(cls, filepath):
-        with open(filepath, 'r', encoding="utf-8") as f:
-            return cls.parse_text(f.read())
+    Returns:
+        (str, dict): A tuple containing the markdown as string and the frontmatter as dict (empty if none)
+    """
+    if contains_frontmatter(raw_text):
+        split_text = raw_text.split("---\n")
+        content = "".join(split_text[2:])
+        frontmatter = "".join(split_text[:2])
+        return content, parse_frontmatter(frontmatter)
+    else:
+        return raw_text, {}
 
-    # Loads file and returns and returns content and frontmatter separately
-    @classmethod
-    def load_file(cls, filepath):
-        with open(filepath, 'r', encoding="utf-8") as f:
-            raw_text = f.read()
-        
-        if cls.contains_frontmatter(raw_text):
-            split_text = raw_text.split("---\n")
-            content = "".join(split_text[1:])
-            frontmatter_type = cls.get_frontmatter_type(raw_text)
+def save_frontmatter(data: dict) -> str:
+    """
+    Saves the given dictionary as markdown frontmatter.
 
-            if cls.can_parse(frontmatter_type):
-                return content, cls.parse_text(raw_text)
-            else:
-                return content, {}
+    Args:
+        data (dict): Dictionary containing all the frontmatter key-value pairs
+
+    Returns:
+        str: A string containing the frontmatter in the correct plaintext format 
+    """
+    lines = []
+    for key, value in data.items():
+        if isinstance(value, list):
+            lines.append(str(key) + ": " + "[" + ",".join([f"'{x}'" for x in value]) + "]")
         else:
-            return raw_text, {}
+            lines.append(str(key) + ": " +  str(value))
+    return "\n".join(lines)
 
-    @staticmethod
-    def save(data, output_file):
-        lines = []
-        for key, value in data.items():
-            if isinstance(value, list):
-                lines.append(str(key) + ": " + "[" + ",".join(value) + "]")
-            else:
-                lines.append(str(key) + ": " +  str(value))
+def parse_frontmatter(raw_text: str) -> dict:
+    """
+    Parser for markdown file front matter. This parser has the following features:
+       * Simple key-value pairings (`key: value`)
+       * Comma-separated lists between brackets (`list: ['value1', 'value2']`)
+       * Keys are case insensitive
 
-        with open(output_file, 'w', encoding="utf-8") as f:
-            f.write("\n".join(lines))
+    Args:
+        raw_text (str): String containing frontmatter (excluding fences)
 
-# Parser for page front matter
-#    * Simple key/value pairings
-#    * Comma-separated lists between brackets
-#    * Keys are case insensitive
-def parseSimpleFrontMatter(raw_text):
+    Returns:
+        dict: A dictionary containing all the frontmatter key:value pairs
+    """
     front_matter = {}
     lines = raw_text.split("\n")
     for line in lines:
         if ":" in line:
             key, value = (item.strip() for item in line.split(": "))
             if value.startswith("[") and value.endswith("]"):
-                value = [item.strip() for item in value[1:-1].split(",")]
+                value = [item.strip().strip("'\"") for item in value[1:-1].split(",")]
             front_matter[key.lower()] = value
         else:
             continue
     return front_matter
-
-def parseJSON(raw_text):
-    return json.loads(raw_text)
-
-def get_parsers():
-    return {
-        "simple": parseSimpleFrontMatter,
-        "json": parseJSON
-    }

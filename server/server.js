@@ -5,19 +5,32 @@ import fs from "fs";
 import path from 'path';
 import FileProcessor from './file_processor.js';
 
+const fileExtensionToContentType = {
+    ".pdf": "application/pdf",
+    ".js": "application/javascript",
+    ".html": "text/html",
+    ".gif": "image/gif",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png"
+}
+
 const REFRESH_SCRIPT_PATH = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), 'live_refresh.js'); 
 
 function urlToPath(requestUrl, baseDirectory) {
     let filePath;
+    const decodedRequestUrl = decodeURI(requestUrl);
+    console.log(decodedRequestUrl);
 
-    if (requestUrl === '/') {
+    if (decodedRequestUrl === '/') {
         filePath='/index.html'
-    } else if (!requestUrl.split('/').pop().includes(".")) {
-        filePath=requestUrl+'.html';
+    } else if (!decodedRequestUrl.split('/').pop().includes(".")) {
+        filePath=decodedRequestUrl+'.html';
     } else {
-        filePath=url.parse(requestUrl).pathname;
+        filePath = decodedRequestUrl;
     }
 
+    console.log(filePath);
     // need to use path.normalize so people can't access directories underneath baseDirectory
     const fsPath = baseDirectory+path.normalize(filePath);
     return fsPath;
@@ -43,12 +56,16 @@ const websiteRequestHandler = async (request, response, server) => {
         .pipe(response);
     }
 
-    fileStream.on('open', function() {
-         response.writeHead(200)
-    })
+    const contentType = fileExtensionToContentType[fsPath.split(".").pop()] ?? "application/octet-stream";
+
+    fileStream.on('end', function() {
+        response.writeHead(200, {"Content-Type": contentType});
+   })
+
     fileStream.on('error',function(e) {
-         response.writeHead(404)     // assume the file doesn't exist
-         response.end()
+        console.log(e)
+         response.writeHead(404);     // assume the file doesn't exist
+         response.end();
     })
 };
 

@@ -1,27 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <title>{{metadata.title}} | {{metadata.author}}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-
-    {% for script in metadata.scripts -%}
-    {% if "mathjax.js" in script -%}
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-AMS_CHTML"></script>
-    {%- else -%}
-    <script type='text/javascript' async src='/js/{{script}}'></script>
-    {%- endif %}
-    {% endfor %}
-
-    {% for stylesheet in metadata.stylesheets -%}
-    <link rel="stylesheet" type="text/css" href="/css/{{stylesheet}}">
-    {% endfor %}
-
-    {% if "highlight.pack.js" in metadata.scripts -%}
-    <script>hljs.initHighlightingOnLoad();</script>
-    {%- endif %}
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
 </head>
 <body>
     {{content}}
