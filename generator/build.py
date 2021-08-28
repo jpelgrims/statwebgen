@@ -87,8 +87,7 @@ def autobuild_website(args, kill_switch, server=None):
                 build_files.append(file)
 
         if len(build_files) > 0:
-            print('')
-            print("{} file(s) modified, rebuilding...".format(len(build_files)))
+            print("{} file(s) modified, rebuilding...\n".format(len(build_files)))
             process_files(build_files, args.input_dir, args.output_dir, args.draft)
         time.sleep(0.2)
     print("Shutting down autobuild process...")
@@ -169,9 +168,6 @@ def process_files(files: [str], input_dir: str, output_dir: str, drafts: bool = 
         project_files[md_file]["path"] = md_file
         project_files[md_file]["filename"] = os.path.basename(md_file)
         project_files[md_file]["link"] = os.path.relpath(md_file, input_dir).replace(".md", "")
-        print(metadata)
-
-        
 
     # Process markdown files
     for md_file in md_files:

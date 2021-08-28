@@ -6,13 +6,15 @@ import path from 'path';
 import FileProcessor from './file_processor.js';
 
 const fileExtensionToContentType = {
-    ".pdf": "application/pdf",
-    ".js": "application/javascript",
-    ".html": "text/html",
-    ".gif": "image/gif",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png"
+    "pdf": "application/pdf",
+    "css": "text/css",
+    "js": "application/javascript",
+    "html": "text/html",
+    "txt": 'text/plain',
+    "gif": "image/gif",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png"
 }
 
 const REFRESH_SCRIPT_PATH = path.resolve(path.dirname(url.fileURLToPath(import.meta.url)), 'live_refresh.js'); 
@@ -20,7 +22,6 @@ const REFRESH_SCRIPT_PATH = path.resolve(path.dirname(url.fileURLToPath(import.m
 function urlToPath(requestUrl, baseDirectory) {
     let filePath;
     const decodedRequestUrl = decodeURI(requestUrl);
-    console.log(decodedRequestUrl);
 
     if (decodedRequestUrl === '/') {
         filePath='/index.html'
@@ -30,9 +31,8 @@ function urlToPath(requestUrl, baseDirectory) {
         filePath = decodedRequestUrl;
     }
 
-    console.log(filePath);
     // need to use path.normalize so people can't access directories underneath baseDirectory
-    const fsPath = baseDirectory+path.normalize(filePath);
+    const fsPath = path.resolve(baseDirectory) + path.normalize(filePath);
     return fsPath;
 }
 
@@ -43,43 +43,45 @@ const websiteRequestHandler = async (request, response, server) => {
     let script = await fsPromises.readFile(REFRESH_SCRIPT_PATH, 'utf-8', (err, data) => {return data;});
     script = '<script>' + script.replace("<port>", server.port) + '</script>';
 
-    const fileProcessorStream = new FileProcessor(script);
-    var fileStream = fs.createReadStream(fsPath);
+    let fileStream = fs.createReadStream(fsPath);
 
-    if (server.liveRefresh && fsPath.endsWith(".html")) {
-        server.currentUrl = request.url;
-        fileStream
-            .pipe(fileProcessorStream)
-            .pipe(response);
-    } else {
-        fileStream
-        .pipe(response);
-    }
+    fileStream.on('open', function () {
+        const contentType = fileExtensionToContentType[fsPath.split(".").pop()] ?? "application/octet-stream";
+        response.setHeader('Content-Type', contentType);
 
-    const contentType = fileExtensionToContentType[fsPath.split(".").pop()] ?? "application/octet-stream";
-
-    fileStream.on('end', function() {
-        response.writeHead(200, {"Content-Type": contentType});
-   })
+        if (server.liveRefresh && fsPath.endsWith(".html")) {
+            // Insert the live-refresh script into every html page we serve
+            const fileProcessorStream = new FileProcessor(script);
+            server.currentUrl = request.url;
+            fileStream.pipe(fileProcessorStream).pipe(response);
+        } else {
+            fileStream.pipe(response);
+        }
+    });
 
     fileStream.on('error',function(e) {
-        console.log(e)
-         response.writeHead(404);     // assume the file doesn't exist
-         response.end();
-    })
+        console.log(e);
+        response.setHeader('Content-Type', 'text/plain');
+        response.writeHead(404); // Assume the file doesn't exist
+        response.end();
+    });
 };
 
 // Long polling
 const liveRefreshHandler = async (request, response, server) => {
-
     if (request.url === "/_refresh/long_poll") {
         const filePath = urlToPath(server.currentUrl, server.baseDirectory);
+        console.log(`[Internal]: Now watching ${server.currentUrl}, will refresh on changes`);
 
-        // Flag is required because file changed event fires twice somehow (and we can't send a
-        // response to a request we already responded to
-        let flag = false; 
-        fs.watch(filePath, {persistent:false}, (event, trigger) => {
-            if (flag) { return; } else { flag=true; }
+        // Remove the previous watcher, otherwise it will keep on running even though
+        // we don't use it anymore 
+        if (server.currentWatch) {
+            fs.unwatchFile(server.currentWatch);
+        }
+
+        fs.watchFile(filePath, {persistent:false, interval: 100}, (event, trigger) => {
+            console.log(`[Internal]: ${server.currentUrl} changed on disk, refreshing`);
+            server.currentWatch = server.filePath;
             response.writeHead(200, {'Content-Type': 'application/json'});
             response.write(JSON.stringify({'refresh': true}));
             response.end();
@@ -105,9 +107,9 @@ const requestListener = async function (request, response) {
         this.defaultHandler(request, response, this);
         console.log(`[Request => 200]: ${request.url}`);
    } catch(e) {
-        response.writeHead(500)
-        response.end()     // end the response so browsers don't hang
-        console.log(e.stack)
+        response.writeHead(500);
+        response.end();     // end the response so browsers don't hang
+        console.log(e.stack);
         console.log(`[Request => 500]: ${request.url}`);
    }
 };
@@ -119,6 +121,7 @@ export default function createServer(folder) {
     httpServer.baseDirectory = folder;
     httpServer.lastChanges = 0;
     httpServer.currentUrl = "/";
+    httpServer.currentWatch;
     httpServer.requestHandlers = {
         "/_refresh/*": liveRefreshHandler
     };

@@ -10,11 +10,12 @@ yargs
         const directory = argv.path ? argv.path : process.cwd();
 
         const server = createServer(directory);
+        console.info(`Dev-server running on port ${argv.port}, serving from from ${directory}`)
+
         if (argv.autorefresh) {
             server.enableAutoRefresh();
+            console.info(`Autorefresh is enabled.`)
         }
-
-        console.info(`Dev-server running on port ${argv.port}, serving from from ${directory}`)
 
         server.run(argv.port);
 })
