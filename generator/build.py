@@ -4,15 +4,40 @@ import glob
 import time
 import sys
 import shutil
+import threading
+from queue import Queue
 from datetime import datetime
+from enum import Enum
 
 from parsing import load_markdown_file
 from render import render_markdown, save_render
 from config import get_config
 
+
+class FileState(Enum):
+    Deleted = 0
+    Added = 1
+
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 def scan(directory: str, pattern: str = "*", exclude_dirs: [str] = [], include_templates: bool = False) -> [str]:
+    files = []
+    for dir,_,_ in os.walk(directory):
+        files.extend(glob.glob(os.path.join(dir,pattern)))
+        
+    files = [
+        file for file in files if \
+            not any(dir in file for dir in exclude_dirs) and \
+            not any(part.startswith(".") for part in file.split(os.path.sep)) and \
+            not os.path.isdir(file)
+    ]
+
+    if include_templates:
+        files.extend(glob.glob(os.path.join(directory,".templates", "*.html")))
+        
+    return files
+
+def scan_threaded(change_queue: Queue, directory: str, pattern: str = "*", exclude_dirs: [str] = [], include_templates: bool = False) -> [str]:
     """
     Scans the provided directory for any files that are required for the static website build.
 
@@ -25,20 +50,28 @@ def scan(directory: str, pattern: str = "*", exclude_dirs: [str] = [], include_t
     Returns:
         [str]: List of files in the directory, with filepaths starting from the provided directory.
     """
-    files = []
-    pattern = pattern
+    filelist = []
+    while True:
+        new_filelist = scan(directory, pattern, exclude_dirs, include_templates)
+        
+        added_files = [file for file in new_filelist if not file in filelist]
+        removed_files = [file for file in filelist if not file in new_filelist]
 
-    for dir,_,_ in os.walk(directory):
-        files.extend(glob.glob(os.path.join(dir,pattern)))
-    
-    files = [file for file in files if \
-        not any(dir in file for dir in exclude_dirs) and \
-        not any(part.startswith(".") for part in file.split(os.path.sep)) and \
-        not os.path.isdir(file) ]
-    if include_templates:
-        files.extend(glob.glob(os.path.join(directory,".templates", "*.html")))
+        for file in removed_files:
+            change_queue.put({
+                "type": FileState.Deleted,
+                "filepath": file 
+            })
+        
+        for file in added_files:
+            change_queue.put({
+                "type": FileState.Added,
+                "filepath": file 
+            })
+        
+        filelist = new_filelist
 
-    return files
+        time.sleep(1)
 
 
 def derive_output_path(input_path, input_dir, output_dir):
@@ -56,20 +89,50 @@ def build_website(args):
     process_files(files, args.input_dir, args.output_dir, args.draft)
 
 # Check for modified files and only rebuild those
-def autobuild_website(args, kill_switch, server=None):
+def autobuild_website(args, kill_switch):
+    change_queue = Queue()
+
+    # The scanner finds newly added or deleted files. It is a thread because the 
+    # scanning operation is quite costly, and I can't be bothered to speed it up.
+    scanner = threading.Thread(target=scan_threaded, args=(change_queue, args.input_dir, "*", [], True,), daemon=True)
+    scanner.start()
+
+    files = []
     last_modified = {}
     while not kill_switch.is_set():
-        files = scan(args.input_dir, include_templates=True)
+        file_changes = []
+        while not change_queue.empty():
+            file_changes.append(change_queue.get())
+        
+        change_count = len(file_changes)
+        if change_count > 0:
+            print(f"{change_count} files were added and/or removed")
+
+        for change in file_changes:
+            type = change.get("type")
+            filepath = change.get("filepath")
+
+            if type == FileState.Deleted:
+                files.remove(filepath)
+            elif type == FileState.Added:
+                files.append(filepath)
+        
         modified_files = []
         for file in files:
+            stat = None
+            try:
+                stat = os.stat(file)
+            except FileNotFoundError as e:
+                continue
+
             if file not in last_modified.keys():
                 # File added since last scan
                 modified_files.append(file)
-                last_modified[file] = os.stat(file)[8]
-            elif last_modified[file] < os.stat(file)[8]:
+                last_modified[file] = stat[8]
+            elif last_modified[file] < stat[8]:
                 # File modified since last scan
                 modified_files.append(file)
-                last_modified[file] = os.stat(file)[8]
+                last_modified[file] = stat[8]
 
         # Look for changed templates
         build_files = []
@@ -89,7 +152,7 @@ def autobuild_website(args, kill_switch, server=None):
         if len(build_files) > 0:
             print("{} file(s) modified, rebuilding...\n".format(len(build_files)))
             process_files(build_files, args.input_dir, args.output_dir, args.draft)
-        time.sleep(0.2)
+        time.sleep(0.01)
     print("Shutting down autobuild process...")
     sys.exit(0)
 
